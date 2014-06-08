@@ -1,13 +1,14 @@
-'''
+"""
 This library is provided to allow standard python
 logging to output log data as JSON formatted strings
 ready to be shipped out to logstash.
-'''
+"""
 import logging
 import socket
 import datetime
 import traceback as tb
 import json
+
 
 def _default_json_default(obj):
     """
@@ -18,6 +19,7 @@ def _default_json_default(obj):
         return obj.isoformat()
     else:
         return str(obj)
+
 
 class LogstashFormatter(logging.Formatter):
     """
@@ -40,6 +42,7 @@ class LogstashFormatter(logging.Formatter):
         :param json_default: Default JSON representation for unknown types,
                              by default coerce everything to a string
         """
+        super(LogstashFormatter, self).__init__(fmt, datefmt)
 
         if fmt is not None:
             self._fmt = json.loads(fmt)
@@ -56,7 +59,7 @@ class LogstashFormatter(logging.Formatter):
         else:
             try:
                 self.source_host = socket.gethostname()
-            except:
+            except OSError:
                 self.source_host = ""
 
     def format(self, record):
@@ -96,25 +99,30 @@ class LogstashFormatter(logging.Formatter):
 
         return json.dumps(logr, default=self.json_default, cls=self.json_cls)
 
-    def _build_fields(self, defaults, fields):
-        """Return provided fields including any in defaults
+    @staticmethod
+    def _build_fields(defaults, fields):
+        """
+        Return provided fields including any in defaults
 
-        >>> f = LogstashFormatter()
+        f = LogstashFormatter()
         # Verify that ``fields`` is used
-        >>> f._build_fields({}, {'foo': 'one'}) == \
+        f._build_fields({}, {'foo': 'one'}) == \
                 {'foo': 'one'}
         True
         # Verify that ``@fields`` in ``defaults`` is used
-        >>> f._build_fields({'@fields': {'bar': 'two'}}, {'foo': 'one'}) == \
+        f._build_fields({'@fields': {'bar': 'two'}}, {'foo': 'one'}) == \
                 {'foo': 'one', 'bar': 'two'}
         True
         # Verify that ``fields`` takes precedence
-        >>> f._build_fields({'@fields': {'foo': 'two'}}, {'foo': 'one'}) == \
+        f._build_fields({'@fields': {'foo': 'two'}}, {'foo': 'one'}) == \
                 {'foo': 'one'}
         True
         """
-        return dict(defaults.get('@fields', {}).items() + fields.items())
-    
+        provided_fields = dict()
+        provided_fields.update(defaults.get('@fields', {}))
+        provided_fields.update(fields)
+        return provided_fields
+
 
 class LogstashFormatterV1(LogstashFormatter):
     """
@@ -140,7 +148,7 @@ class LogstashFormatterV1(LogstashFormatter):
         if 'exc_text' in fields and not fields['exc_text']:
             fields.pop('exc_text')
 
-	now = datetime.datetime.utcnow()
+        now = datetime.datetime.utcnow()
         base_log = {'@timestamp': now.strftime("%Y-%m-%dT%H:%M:%S") + ".%03d" % (now.microsecond / 1000) + "Z",
                     '@version': 1,
                     'source_host': self.source_host}
